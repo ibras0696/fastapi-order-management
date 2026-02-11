@@ -10,6 +10,7 @@ jobs:
     env:
       RUN_MIGRATIONS_ON_STARTUP: "false"
       SECRET_KEY: "ci-secret-key-with-min-32-chars-123456"
+      DATABASE_URL: sqlite+pysqlite:///./ci_settings.db
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
       REDIS_DB: "0"
