@@ -9,7 +9,7 @@ best-effort: при исключениях возвращаем None/False и л
 from __future__ import annotations
 
 from loguru import logger
-from redis import Redis
+from redis.asyncio import Redis
 
 from app.core.config import get_settings
 from app.db.redis import dumps_json, loads_json
@@ -22,7 +22,7 @@ def make_order_cache_key(order_id: str) -> str:
     return f"orders:{order_id}"
 
 
-def get_order_from_cache(client: Redis, order_id: str) -> OrderOut | None:
+async def get_order_from_cache(client: Redis, order_id: str) -> OrderOut | None:
     """Получить заказ из Redis.
 
     Parameters
@@ -40,7 +40,7 @@ def get_order_from_cache(client: Redis, order_id: str) -> OrderOut | None:
 
     key = make_order_cache_key(order_id)
     try:
-        value = client.get(key)
+        value = await client.get(key)
         if value is None:
             return None
         data = loads_json(value)
@@ -54,7 +54,7 @@ def get_order_from_cache(client: Redis, order_id: str) -> OrderOut | None:
         return None
 
 
-def set_order_cache(client: Redis, order: OrderOut) -> bool:
+async def set_order_cache(client: Redis, order: OrderOut) -> bool:
     """Сохранить заказ в Redis с TTL.
 
     Returns
@@ -67,7 +67,7 @@ def set_order_cache(client: Redis, order: OrderOut) -> bool:
     key = make_order_cache_key(order.id)
     try:
         payload = dumps_json(order.model_dump())
-        client.setex(key, settings.redis_orders_ttl_seconds, payload)
+        await client.setex(key, settings.redis_orders_ttl_seconds, payload)
         return True
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -78,7 +78,7 @@ def set_order_cache(client: Redis, order: OrderOut) -> bool:
         return False
 
 
-def delete_order_cache(client: Redis, order_id: str) -> bool:
+async def delete_order_cache(client: Redis, order_id: str) -> bool:
     """Удалить кеш заказа.
 
     Returns
@@ -89,7 +89,7 @@ def delete_order_cache(client: Redis, order_id: str) -> bool:
 
     key = make_order_cache_key(order_id)
     try:
-        client.delete(key)
+        await client.delete(key)
         return True
     except Exception as exc:  # noqa: BLE001
         logger.warning(

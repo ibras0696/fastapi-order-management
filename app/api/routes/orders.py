@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
@@ -34,9 +34,9 @@ def _to_order_out(order) -> OrderOut:
 
 
 @router.post("/orders/", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
-def create_order_endpoint(
+async def create_order_endpoint(
     payload: OrderCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> OrderOut:
     """Создать заказ (только авторизованные).
@@ -57,16 +57,16 @@ def create_order_endpoint(
         401, если нет/невалидный токен.
     """
 
-    order = create_order(db, user_id=current_user.id, items=payload.items)
+    order = await create_order(db, user_id=current_user.id, items=payload.items)
     out = _to_order_out(order)
-    set_order_cache(get_redis_client(), out)
+    await set_order_cache(get_redis_client(), out)
     return out
 
 
 @router.get("/orders/{order_id}/", response_model=OrderOut)
-def get_order_endpoint(
+async def get_order_endpoint(
     order_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> OrderOut:
     """Получить заказ по `order_id` (с кешированием).
@@ -89,7 +89,7 @@ def get_order_endpoint(
         404, если заказ не найден.
     """
 
-    cached = get_order_from_cache(get_redis_client(), order_id=order_id)
+    cached = await get_order_from_cache(get_redis_client(), order_id=order_id)
     if cached is not None:
         if cached.user_id != current_user.id:
             raise HTTPException(
@@ -98,7 +98,7 @@ def get_order_endpoint(
             )
         return cached
 
-    order = get_order(db, order_id=order_id)
+    order = await get_order(db, order_id=order_id)
     if order is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -107,15 +107,15 @@ def get_order_endpoint(
     if order.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     out = _to_order_out(order)
-    set_order_cache(get_redis_client(), out)
+    await set_order_cache(get_redis_client(), out)
     return out
 
 
 @router.patch("/orders/{order_id}/", response_model=OrderOut)
-def update_order_status_endpoint(
+async def update_order_status_endpoint(
     order_id: str,
     payload: OrderStatusUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> OrderOut:
     """Обновить статус заказа.
@@ -140,7 +140,7 @@ def update_order_status_endpoint(
         404, если заказ не найден.
     """
 
-    order = get_order(db, order_id=order_id)
+    order = await get_order(db, order_id=order_id)
     if order is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -148,16 +148,16 @@ def update_order_status_endpoint(
         )
     if order.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    order = update_order_status(db, order=order, status=payload.status)
+    order = await update_order_status(db, order=order, status=payload.status)
     out = _to_order_out(order)
-    set_order_cache(get_redis_client(), out)
+    await set_order_cache(get_redis_client(), out)
     return out
 
 
 @router.get("/orders/user/{user_id}/", response_model=list[OrderOut])
-def list_user_orders_endpoint(
+async def list_user_orders_endpoint(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[OrderOut]:
     """Получить список заказов пользователя.
@@ -181,9 +181,9 @@ def list_user_orders_endpoint(
 
     if user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    orders = list_orders_by_user(db, user_id=user_id)
+    orders = await list_orders_by_user(db, user_id=user_id)
     out_orders = [_to_order_out(order) for order in orders]
     redis_client = get_redis_client()
     for order_out in out_orders:
-        set_order_cache(redis_client, order_out)
+        await set_order_cache(redis_client, order_out)
     return out_orders

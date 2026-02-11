@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
 from app.db.session import get_db
@@ -14,9 +14,9 @@ from app.services.users import get_user_by_email
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token/")
 
 
-def get_current_user(
+async def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> User:
     """Получить текущего пользователя по JWT токену.
 
@@ -24,8 +24,8 @@ def get_current_user(
     ----------
     token : str
         JWT access token.
-    db : sqlalchemy.orm.Session
-        Сессия БД.
+    db : sqlalchemy.ext.asyncio.AsyncSession
+        Async сессия БД.
 
     Returns
     -------
@@ -50,7 +50,7 @@ def get_current_user(
     except Exception as exc:  # noqa: BLE001
         raise credentials_exception from exc
 
-    user = get_user_by_email(db, email=subject)
+    user = await get_user_by_email(db, email=subject)
     if user is None:
         raise credentials_exception
     return user

@@ -98,6 +98,7 @@ class Settings(BaseSettings):
     celery_result_backend: str | None = None
 
     database_url: str | None = None
+    database_async_url: str | None = None
 
     @property
     def postgres_dsn(self) -> str:
@@ -168,7 +169,7 @@ class Settings(BaseSettings):
 
     @property
     def sqlalchemy_url(self) -> str:
-        """Вернуть URL подключения к БД для SQLAlchemy.
+        """Вернуть sync URL подключения к БД для SQLAlchemy.
 
         Priority
         --------
@@ -182,6 +183,25 @@ class Settings(BaseSettings):
         """
 
         return self.database_url or self.postgres_dsn
+
+    @property
+    def sqlalchemy_async_url(self) -> str:
+        """Вернуть async URL подключения к БД для SQLAlchemy AsyncEngine.
+
+        Priority
+        --------
+        1) `DATABASE_ASYNC_URL`, если задан.
+        2) Иначе строится из `DATABASE_URL`/Postgres DSN:
+           - `postgresql://...` -> `postgresql+asyncpg://...`
+           - `sqlite+pysqlite://...` -> `sqlite+aiosqlite://...`
+        """
+
+        url = self.database_async_url or self.sqlalchemy_url
+        if url.startswith("postgresql://"):
+            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if url.startswith("sqlite+pysqlite://"):
+            return url.replace("sqlite+pysqlite://", "sqlite+aiosqlite://", 1)
+        return url
 
 
 @lru_cache(maxsize=1)

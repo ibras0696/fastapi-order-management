@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 
-from redis import Redis
+from redis.asyncio import Redis
 
 
 _LUA_TOKEN_BUCKET = r"""
@@ -72,14 +72,14 @@ class RedisRateLimiter:
         self.refill_rate = refill_rate
         self._script = client.register_script(_LUA_TOKEN_BUCKET)
 
-    def allow(self, key: str, cost: int = 1) -> bool:
+    async def allow(self, key: str, cost: int = 1) -> bool:
         """Проверить, разрешён ли запрос."""
 
         if cost <= 0:
             raise ValueError("cost must be positive")
 
         now_ts = time.time()
-        allowed = self._script(
+        allowed = await self._script(
             keys=[key],
             args=[self.capacity, self.refill_rate, now_ts, cost],
         )

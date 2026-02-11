@@ -4,42 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.core import config as config_module
 from app.core import rate_limit_middleware as rate_limit_module
-from app.db.base import Base
-from app.db.session import get_db
-from app.main import create_app
 from app.models import order as _order  # noqa: F401
 from app.models import user as _user  # noqa: F401
-
-
-def make_client(tmp_path: Path) -> TestClient:
-    """Собрать TestClient с тестовой SQLite БД."""
-
-    db_path = tmp_path / "test.db"
-    engine = create_engine(
-        f"sqlite+pysqlite:///{db_path}",
-        connect_args={"check_same_thread": False},
-    )
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    Base.metadata.create_all(bind=engine)
-
-    app = create_app()
-
-    def override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    return TestClient(app)
+from tests_helpers import make_client
 
 
 def test_rate_limit_returns_429(tmp_path: Path, monkeypatch) -> None:
@@ -53,7 +22,7 @@ def test_rate_limit_returns_429(tmp_path: Path, monkeypatch) -> None:
     rate_limit_module.get_rate_limiter.cache_clear()
     rate_limit_module.get_rate_limiter_redis.cache_clear()
 
-    client = make_client(tmp_path)
+    client, _ = make_client(tmp_path)
 
     response = client.post(
         "/register/",
@@ -76,7 +45,7 @@ def test_cors_preflight_sets_headers(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("CORS_ALLOW_HEADERS", "authorization,content-type")
     config_module.get_settings.cache_clear()
 
-    client = make_client(tmp_path)
+    client, _ = make_client(tmp_path)
 
     response = client.options(
         "/orders/",

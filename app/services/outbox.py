@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.outbox import OutboxEvent, OutboxStatus
 
 
 def add_outbox_event(
-    db: Session,
+    db: AsyncSession,
     *,
     event_type: str,
     aggregate_id: str,
@@ -20,8 +20,8 @@ def add_outbox_event(
 
     Parameters
     ----------
-    db : sqlalchemy.orm.Session
-        Сессия БД.
+    db : sqlalchemy.ext.asyncio.AsyncSession
+        Async сессия БД.
     event_type : str
         Тип события.
     aggregate_id : str

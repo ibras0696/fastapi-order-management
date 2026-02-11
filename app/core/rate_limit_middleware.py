@@ -74,7 +74,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         allowed = True
         if limiter_backend == "redis":
             try:
-                allowed = get_rate_limiter_redis().allow(key=f"ratelimit:{key}", cost=1)
+                allowed = await get_rate_limiter_redis().allow(
+                    key=f"ratelimit:{key}",
+                    cost=1,
+                )
             except Exception:  # noqa: BLE001
                 allowed = get_rate_limiter().allow(key=key, cost=1)
         else:

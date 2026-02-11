@@ -5,14 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from app.db.base import Base
-from app.db.session import get_db
-from app.main import create_app
 from app.models import order as _order  # noqa: F401  # ensure model import for metadata
 from app.models import user as _user  # noqa: F401  # ensure model import for metadata
+from tests_helpers import make_client
 
 
 class FakeRedis:
@@ -21,52 +17,37 @@ class FakeRedis:
     def __init__(self) -> None:
         self.data: dict[str, str] = {}
 
-    def get(self, key: str) -> str | None:
+    async def get(self, key: str) -> str | None:
         return self.data.get(key)
 
-    def setex(self, key: str, ttl_seconds: int, value: str) -> None:  # noqa: ARG002
+    async def setex(
+        self,
+        key: str,
+        ttl_seconds: int,
+        value: str,
+    ) -> None:  # noqa: ARG002
         self.data[key] = value
 
-    def delete(self, key: str) -> None:
+    async def delete(self, key: str) -> None:
         self.data.pop(key, None)
 
 
 class BrokenRedis:
     """Redis-клиент, который всегда падает (симуляция Redis down)."""
 
-    def get(self, key: str) -> str | None:  # noqa: ARG002
+    async def get(self, key: str) -> str | None:  # noqa: ARG002
         raise RuntimeError("redis is down")
 
-    def setex(self, key: str, ttl_seconds: int, value: str) -> None:  # noqa: ARG002
+    async def setex(
+        self,
+        key: str,
+        ttl_seconds: int,
+        value: str,
+    ) -> None:  # noqa: ARG002
         raise RuntimeError("redis is down")
 
-    def delete(self, key: str) -> None:  # noqa: ARG002
+    async def delete(self, key: str) -> None:  # noqa: ARG002
         raise RuntimeError("redis is down")
-
-
-def make_client(tmp_path: Path) -> TestClient:
-    """Собрать TestClient с тестовой SQLite БД."""
-
-    db_path = tmp_path / "test.db"
-    engine = create_engine(
-        f"sqlite+pysqlite:///{db_path}",
-        connect_args={"check_same_thread": False},
-    )
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    Base.metadata.create_all(bind=engine)
-
-    app = create_app()
-
-    def override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    return TestClient(app)
 
 
 def register_and_login(client: TestClient, email: str, password: str) -> str:
@@ -89,7 +70,7 @@ def auth_headers(token: str) -> dict[str, str]:
 def test_get_order_uses_cache_when_present(tmp_path: Path, monkeypatch) -> None:
     """GET /orders/{id} отдаёт из кеша (без обращения к БД), если кеш есть."""
 
-    client = make_client(tmp_path)
+    client, _ = make_client(tmp_path)
     token = register_and_login(client, email="user@example.com", password="password123")
 
     response = client.post(
@@ -113,7 +94,7 @@ def test_get_order_uses_cache_when_present(tmp_path: Path, monkeypatch) -> None:
 
     monkeypatch.setattr("app.api.routes.orders.get_redis_client", lambda: fake_redis)
 
-    def boom(*args, **kwargs):  # noqa: ANN001,ARG001
+    async def boom(*args, **kwargs):  # noqa: ANN001,ARG001
         raise AssertionError("DB must not be used when cache hit")
 
     monkeypatch.setattr("app.api.routes.orders.get_order", boom)
@@ -126,7 +107,7 @@ def test_get_order_uses_cache_when_present(tmp_path: Path, monkeypatch) -> None:
 def test_get_order_fallbacks_to_db_when_redis_down(tmp_path: Path, monkeypatch) -> None:
     """Если Redis недоступен, эндпоинт должен работать (fallback на БД)."""
 
-    client = make_client(tmp_path)
+    client, _ = make_client(tmp_path)
     token = register_and_login(client, email="user@example.com", password="password123")
 
     response = client.post(

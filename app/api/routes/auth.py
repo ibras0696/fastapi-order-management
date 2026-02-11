@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.db.session import get_db
@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.post("/register/", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
+async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> UserOut:
     """Зарегистрировать пользователя.
 
     Parameters
@@ -34,20 +34,20 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
         400, если email уже зарегистрирован.
     """
 
-    existing = get_user_by_email(db, payload.email)
+    existing = await get_user_by_email(db, payload.email)
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="email already registered",
         )
-    user = create_user(db, email=payload.email, password=payload.password)
+    user = await create_user(db, email=payload.email, password=payload.password)
     return UserOut(id=user.id, email=user.email)
 
 
 @router.post("/token/", response_model=Token)
-def login(
+async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> Token:
     """Получить JWT токен по email/паролю (OAuth2 Password Flow).
 
@@ -67,7 +67,11 @@ def login(
         401, если логин/пароль неверные.
     """
 
-    user = authenticate_user(db, email=form_data.username, password=form_data.password)
+    user = await authenticate_user(
+        db,
+        email=form_data.username,
+        password=form_data.password,
+    )
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

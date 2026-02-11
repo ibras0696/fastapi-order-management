@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import json
 
-import redis
-from redis import Redis
+import redis.asyncio as redis
+from redis.asyncio import Redis
 
 from app.core.config import get_settings
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -21,7 +22,7 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     Здесь запускаем миграции один раз при старте процесса (если включено).
     """
 
-    run_migrations_once()
+    await asyncio.to_thread(run_migrations_once)
     yield
 
 

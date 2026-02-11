@@ -5,39 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from app.db.base import Base
-from app.db.session import get_db
-from app.main import create_app
 from app.models import order as _order  # noqa: F401  # ensure model import for metadata
 from app.models import user as _user  # noqa: F401  # ensure model import for metadata
-
-
-def make_client(tmp_path: Path) -> TestClient:
-    """Собрать TestClient с тестовой SQLite БД."""
-
-    db_path = tmp_path / "test.db"
-    engine = create_engine(
-        f"sqlite+pysqlite:///{db_path}",
-        connect_args={"check_same_thread": False},
-    )
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    Base.metadata.create_all(bind=engine)
-
-    app = create_app()
-
-    def override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    return TestClient(app)
+from tests_helpers import make_client
 
 
 def register_and_login(client: TestClient, email: str, password: str) -> str:
@@ -58,7 +29,7 @@ def auth_headers(token: str) -> dict[str, str]:
 
 
 def test_create_order_unauthorized(tmp_path: Path) -> None:
-    client = make_client(tmp_path)
+    client, _ = make_client(tmp_path)
 
     response = client.post(
         "/orders/",
@@ -68,7 +39,7 @@ def test_create_order_unauthorized(tmp_path: Path) -> None:
 
 
 def test_orders_crud_happy_path(tmp_path: Path) -> None:
-    client = make_client(tmp_path)
+    client, _ = make_client(tmp_path)
     token = register_and_login(client, email="user@example.com", password="password123")
 
     response = client.post(
@@ -111,7 +82,7 @@ def test_orders_crud_happy_path(tmp_path: Path) -> None:
 
 
 def test_orders_forbidden_other_user(tmp_path: Path) -> None:
-    client = make_client(tmp_path)
+    client, _ = make_client(tmp_path)
     token1 = register_and_login(
         client,
         email="user1@example.com",
