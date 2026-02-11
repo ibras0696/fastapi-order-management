@@ -1,12 +1,31 @@
-# Order Management (gpt_codex)
+# Order Management (FastAPI) — Test Task
 
-Sprint 0: project skeleton (FastAPI + config + logging + Docker + Makefile).
-Sprint 1: DB + Alembic + auth (register/token).
-Sprint 2: orders CRUD + validation + JWT authz.
-Sprint 3: Redis cache + graceful degradation.
-Sprint 4: RabbitMQ event-bus + outbox + consumer + Celery tasks.
+Production-minded backend service for managing orders:
+- FastAPI + Swagger UI
+- PostgreSQL + SQLAlchemy + Alembic migrations
+- JWT auth (OAuth2 Password Flow)
+- Redis cache with graceful degradation (fallback to DB)
+- RabbitMQ event-bus with Outbox pattern (reliable delivery)
+- Celery background processing (separate broker, default Redis)
 
-## Quick start (local)
+## Requirements
+
+- Docker + Docker Compose (recommended)
+- Or Python 3.12+ (local run)
+
+## Quick start (Docker) — recommended
+
+```bash
+cd gpt_codex
+cp .env.example .env
+docker compose up -d --build
+```
+
+- Swagger UI: `http://localhost:8001/docs`
+- Health: `http://localhost:8001/health`
+- RabbitMQ UI: `http://localhost:15673` (default `guest/guest`)
+
+## Quick start (Local)
 
 ```bash
 cd gpt_codex
@@ -16,112 +35,95 @@ cp .env.example .env
 make run
 ```
 
-Open Swagger UI: `http://localhost:8000/docs`
+- Swagger UI: `http://localhost:8000/docs`
 
-## Quick start (Docker)
+## How to validate (what a reviewer can run)
 
-```bash
-cd gpt_codex
-cp .env.example .env
-docker compose up --build
-```
-
-Swagger UI: `http://localhost:8001/docs`
-
-## Tests
-
-```bash
-cd gpt_codex
-make test
-```
-
-## CI
-
-Локально:
+### Lint + unit tests
 
 ```bash
 cd gpt_codex
 make ci
 ```
 
+### Curl scenarios (positive + negative)
+
+```bash
+cd gpt_codex
+./scripts/test_api_curl_full.sh
+```
+
+### E2E: create order → outbox → RabbitMQ → consumer → Celery
+
+```bash
+cd gpt_codex
+./scripts/test_event_flow.sh
+```
+
+## API summary
+
+### Auth
+
+- `POST /register/` — JSON `{ "email": "...", "password": "..." }`
+- `POST /token/` — `application/x-www-form-urlencoded` fields: `username` (email), `password`
+
+### Orders (Authorization: Bearer <token>)
+
+- `POST /orders/` — create order
+- `GET /orders/{order_id}/` — get order (Redis first; fallback to DB)
+- `PATCH /orders/{order_id}/` — update status
+- `GET /orders/user/{user_id}/` — list own orders
+
+## Architecture (high-level)
+
+1) `POST /orders/` writes `orders` + `outbox_events` in the same DB transaction.
+2) `outbox_publisher` reads pending outbox events and publishes to RabbitMQ (with retries).
+3) `message_consumer` consumes `new_order` events and triggers Celery task `process_order`.
+4) Celery runs on a separate broker (default Redis) to keep event-bus and task queue independent.
+
 ## Migrations
 
-### Как устроено в этом проекте (для тестового)
+### Test-task mode (self-contained docker compose)
 
-По умолчанию в `.env.example` выставлено `RUN_MIGRATIONS_ON_STARTUP=true`, и миграции
-запускаются **один раз на старт процесса** через FastAPI lifespan
-(`app/core/migrations.py`, advisory lock для Postgres).
+By default `.env.example` enables:
 
-Это удобно для проверки тестового через `docker compose up`, чтобы не требовать
-ручной команды миграций.
+```bash
+RUN_MIGRATIONS_ON_STARTUP=true
+```
 
-Отключить автозапуск миграций:
+Migrations run once on application startup using Postgres advisory lock
+(`app/core/migrations.py`). This makes `docker compose up` self-contained for the test.
+
+### Production recommendation (typical approach)
+
+In production, migrations are usually executed as a **separate deploy step / job**
+(CI/CD step, Kubernetes Job/initContainer), and the API process runs without DDL rights.
+
+To disable migrations-on-startup in this project:
 
 ```bash
 RUN_MIGRATIONS_ON_STARTUP=false
 ```
 
-После отключения миграции можно прогнать вручную:
+Then run migrations explicitly:
 
 ```bash
 cd gpt_codex
 make migrate
 ```
 
-Create a new revision (autogenerate):
+## Useful commands
 
 ```bash
 cd gpt_codex
-make makemigrations m="add something"
+make clean        # remove caches/artifacts
+make dc-up        # docker compose up --build
+make dc-down      # docker compose down -v
+make dc-logs      # follow compose logs
 ```
 
-## Auth API
+## Notes (production-ready expectations)
 
-- `POST /register/` — JSON `{ "email": "...", "password": "..." }`
-- `POST /token/` — form-data `username=email`, `password=...`
-
-## Orders API
-
-- `POST /orders/` — создать заказ (Authorization required)
-- `GET /orders/{order_id}/` — получить заказ (Authorization required)
-- `PATCH /orders/{order_id}/` — обновить статус (Authorization required)
-- `GET /orders/user/{user_id}/` — список заказов пользователя (только свой user_id)
-
-## Curl проверки
-
-При запущенном API:
-
-```bash
-cd gpt_codex
-./scripts/test_api_curl.sh
-```
-
-Полный позитив/негатив прогон:
-
-```bash
-cd gpt_codex
-BASE_URL=http://localhost:8001 ./scripts/test_api_curl_full.sh
-```
-
-E2E проверка event-bus → consumer → celery (с проверкой по логам контейнеров):
-
-```bash
-cd gpt_codex
-BASE_URL=http://localhost:8001 ./scripts/test_event_flow.sh
-```
-
-## Redis cache
-
-`GET /orders/{order_id}/` сначала пытается читать заказ из Redis (TTL по умолчанию 300 секунд),
-при ошибках Redis делает fallback на БД.
-
-## Event-bus (RabbitMQ) + Outbox + Celery
-
-- `new_order` событие пишется в outbox таблицу при создании заказа и доставляется в RabbitMQ отдельным процессом.
-- Consumer читает очередь `new_order` и запускает Celery задачу `process_order`.
-- Celery по умолчанию использует Redis как брокер задач (не RabbitMQ), чтобы не смешивать роли.
-
-## Security
-
-- CORS включён через middleware (настраивается env-переменными `CORS_*`).
-- Rate limiting включён через Token Bucket middleware (настраивается `RATE_LIMIT_*`).
+- Redis is best-effort: Redis errors must not crash the API (fallback to DB).
+- Event-bus publishing is reliable: outbox prevents “order created but event lost”.
+- No hardcoded secrets: use `.env` locally; use secret manager in real deployments.
