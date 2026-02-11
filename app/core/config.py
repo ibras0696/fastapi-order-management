@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     postgres_port: int = Field(5432, ge=1, le=65535)
     postgres_db: str = "order_management"
     postgres_user: str = "postgres"
-    postgres_password: SecretStr = Field(...)
+    postgres_password: SecretStr | None = None
 
     # Redis settings
     redis_host: str = "redis"
@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     def postgres_dsn(self) -> str:
         """Build PostgreSQL DSN from component settings."""
 
+        if self.postgres_password is None:
+            raise ValueError(
+                "POSTGRES_PASSWORD is required when DATABASE_URL is not set",
+            )
         password = self.postgres_password.get_secret_value()
         return (
             f"postgresql://{self.postgres_user}:{password}"
@@ -216,7 +220,7 @@ class Settings(BaseSettings):
             return url.replace("sqlite+pysqlite://", "sqlite+aiosqlite://", 1)
         return url
 
-    @field_validator("postgres_password", "rabbitmq_password")
+    @field_validator("rabbitmq_password")
     @classmethod
     def _validate_non_empty_secret(cls, value: SecretStr) -> SecretStr:
         if not value.get_secret_value().strip():
