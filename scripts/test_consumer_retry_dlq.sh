@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# E2E сценарий: consumer -> DLQ (Dead Letter Queue).
+#
+# Что проверяем:
+# - У нас есть очередь `new_order` (или другая через QUEUE=...).
+# - Consumer читает сообщения и при ошибках делает retry с лимитом.
+# - Если retry-лимит превышен — сообщение должно попасть в DLQ (`<queue>.dlq`), а не зависнуть бесконечно.
+#
+# Как этот сценарий устроен:
+# - Мы публикуем заведомо "плохое" сообщение в очередь, но сразу выставляем header `x-retry-count=999`.
+# - Consumer должен трактовать это как "лимит исчерпан" и мгновенно отправить сообщение в DLQ.
+# - Затем мы проверяем через `rabbitmqctl`, что в DLQ есть хотя бы 1 сообщение.
+#
+# Параметры:
+#   QUEUE=new_order ./scripts/test_consumer_retry_dlq.sh
+
 function die() {
   echo "ERROR: $*" >&2
   exit 1
@@ -9,6 +24,8 @@ function die() {
 QUEUE="${QUEUE:-new_order}"
 
 echo "1) publish invalid message with x-retry-count=999 (should go to DLQ immediately)"
+# Публикуем сообщение из контейнера `web`, чтобы использовать те же настройки (.env) и DNS (`rabbitmq`).
+# Важно: здесь используется `pika` (sync client) как простой инструмент для публикации тестового сообщения.
 docker compose exec -T web python - <<PY
 import json
 
@@ -46,9 +63,11 @@ print("published")
 PY
 
 echo "2) wait a bit for consumer to reject -> DLQ"
+# Даём consumer-у время прочитать сообщение и переложить его в DLQ.
 sleep 2
 
 echo "3) check DLQ message count"
+# Проверяем счётчик сообщений в `<queue>.dlq`.
 COUNT="$(
   docker compose exec -T rabbitmq rabbitmqctl list_queues -q name messages \
   | awk '$1=="'"${QUEUE}.dlq"'"{print $2}'
