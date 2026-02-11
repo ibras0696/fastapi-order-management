@@ -41,3 +41,32 @@ jobs:
 
       - name: Tests
         run: pytest -q
+
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare env
+        run: |
+          cp .env.example .env
+
+      - name: Start stack
+        run: docker compose up -d --build
+
+      - name: Smoke API (curl scenarios)
+        run: ./scripts/test_api_curl_full.sh
+
+      - name: E2E outbox -> rabbit -> consumer -> celery
+        run: ./scripts/test_event_flow.sh
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Shutdown
+        if: always()
+        run: docker compose down -v --remove-orphans

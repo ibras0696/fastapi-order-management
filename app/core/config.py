@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -71,21 +71,23 @@ class Settings(BaseSettings):
     rate_limit_capacity: int = Field(100, ge=1)
     rate_limit_refill_rate: float = Field(50.0, gt=0)
 
-    # Connection settings must come from env/.env (no hardcoded credentials).
-    postgres_host: str | None = None
-    postgres_port: int | None = None
-    postgres_db: str | None = None
-    postgres_user: str | None = None
-    postgres_password: SecretStr | None = None
+    # DB settings
+    postgres_host: str = "db"
+    postgres_port: int = Field(5432, ge=1, le=65535)
+    postgres_db: str = "order_management"
+    postgres_user: str = "postgres"
+    postgres_password: SecretStr = Field(...)
 
-    redis_host: str = Field(...)
-    redis_port: int = Field(..., ge=1, le=65535)
-    redis_db: int = Field(..., ge=0)
+    # Redis settings
+    redis_host: str = "redis"
+    redis_port: int = Field(6379, ge=1, le=65535)
+    redis_db: int = Field(0, ge=0)
     redis_orders_ttl_seconds: int = Field(300, ge=1)
 
-    rabbitmq_host: str = Field(...)
-    rabbitmq_port: int = Field(..., ge=1, le=65535)
-    rabbitmq_user: str = Field(...)
+    # RabbitMQ settings
+    rabbitmq_host: str = "rabbitmq"
+    rabbitmq_port: int = Field(5672, ge=1, le=65535)
+    rabbitmq_user: str = "guest"
     rabbitmq_password: SecretStr = Field(...)
     rabbitmq_vhost: str = Field("/")
     rabbitmq_new_order_queue: str = Field("new_order")
@@ -105,19 +107,6 @@ class Settings(BaseSettings):
     @property
     def postgres_dsn(self) -> str:
         """Build PostgreSQL DSN from component settings."""
-
-        if (
-            self.postgres_host is None
-            or self.postgres_port is None
-            or self.postgres_db is None
-            or self.postgres_user is None
-            or self.postgres_password is None
-        ):
-            raise ValueError(
-                "Postgres settings are incomplete: set DATABASE_URL or set all "
-                "POSTGRES_HOST/POSTGRES_PORT/POSTGRES_DB/POSTGRES_USER/"
-                "POSTGRES_PASSWORD"
-            )
 
         password = self.postgres_password.get_secret_value()
         return (
@@ -227,20 +216,12 @@ class Settings(BaseSettings):
             return url.replace("sqlite+pysqlite://", "sqlite+aiosqlite://", 1)
         return url
 
-    @model_validator(mode="after")
-    def _validate_required_sources(self) -> "Settings":
-        """Проверить, что данные приходят из env/.env, а не из хардкода.
-
-        Notes
-        -----
-        Для Postgres разрешаем два варианта:
-        - `DATABASE_URL` задан
-        - либо заданы все `POSTGRES_*`
-        """
-
-        if self.database_url is None:
-            _ = self.postgres_dsn
-        return self
+    @field_validator("postgres_password", "rabbitmq_password")
+    @classmethod
+    def _validate_non_empty_secret(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value().strip():
+            raise ValueError("secret value must not be empty")
+        return value
 
 
 @lru_cache(maxsize=1)

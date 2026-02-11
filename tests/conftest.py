@@ -13,6 +13,7 @@ from app.core import config as config_module  # noqa: E402
 os.environ.setdefault("RUN_MIGRATIONS_ON_STARTUP", "false")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-with-min-32-chars-123456")
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///./pytest_settings.db")
+os.environ.setdefault("POSTGRES_PASSWORD", "test-postgres-password")
 os.environ.setdefault("REDIS_HOST", "redis")
 os.environ.setdefault("REDIS_PORT", "6379")
 os.environ.setdefault("REDIS_DB", "0")
