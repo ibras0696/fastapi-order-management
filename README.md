@@ -121,9 +121,3 @@ make dc-up        # docker compose up --build
 make dc-down      # docker compose down -v
 make dc-logs      # tail логов compose
 ```
-
-## Замечания (production-ready ожидания)
-
-- Redis best-effort: ошибки Redis не должны “ронять” API (fallback на БД).
-- Надёжная публикация событий: outbox предотвращает сценарий “заказ создан, событие потеряно”.
-- Никаких захардкоженных секретов: локально `.env`, в реальных деплоях — secret manager.
