@@ -1,4 +1,4 @@
-# Order Management (FastAPI) — тестовое задание
+# Order Management (FastAPI)
 
 Production-minded backend сервис для управления заказами:
 - FastAPI + Swagger UI
@@ -16,7 +16,7 @@ Production-minded backend сервис для управления заказа�
 ## Быстрый старт (Docker) — рекомендуется
 
 ```bash
-cd gpt_codex
+cd fastapi-order-management
 cp .env.example .env
 docker compose up -d --build
 ```
@@ -28,7 +28,7 @@ docker compose up -d --build
 ## Быстрый старт (локально)
 
 ```bash
-cd gpt_codex
+cd fastapi-order-management
 make venv
 make install
 cp .env.example .env
@@ -42,21 +42,21 @@ make run
 ### Линтеры + unit tests
 
 ```bash
-cd gpt_codex
+cd fastapi-order-management
 make ci
 ```
 
 ### Curl сценарии (позитив + негатив)
 
 ```bash
-cd gpt_codex
+cd fastapi-order-management
 ./scripts/test_api_curl_full.sh
 ```
 
 ### E2E: create order → outbox → RabbitMQ → consumer → Celery
 
 ```bash
-cd gpt_codex
+cd fastapi-order-management
 ./scripts/test_event_flow.sh
 ```
 
@@ -108,14 +108,14 @@ RUN_MIGRATIONS_ON_STARTUP=false
 После этого миграции можно прогнать явно:
 
 ```bash
-cd gpt_codex
+cd fastapi-order-management
 make migrate
 ```
 
 ## Полезные команды
 
 ```bash
-cd gpt_codex
+cd fastapi-order-management
 make clean        # удалить кеши/артефакты
 make dc-up        # docker compose up --build
 make dc-down      # docker compose down -v
