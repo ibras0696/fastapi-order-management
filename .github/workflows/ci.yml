@@ -63,6 +63,15 @@ jobs:
       - name: E2E outbox -> rabbit -> consumer -> celery
         run: ./scripts/test_event_flow.sh
 
+      - name: E2E Redis down (fallback to DB)
+        run: ./scripts/test_redis_down.sh
+
+      - name: E2E RabbitMQ down (outbox pending + recovery)
+        run: ./scripts/test_rabbitmq_down_outbox.sh
+
+      - name: E2E consumer DLQ (invalid message)
+        run: ./scripts/test_consumer_retry_dlq.sh
+
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs --no-color

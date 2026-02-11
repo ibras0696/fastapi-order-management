@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
 COPY . .
 
 RUN chmod +x scripts/entrypoint_web.sh scripts/entrypoint_worker_noop.sh \
-  && chmod +x scripts/test_api_curl.sh scripts/test_api_curl_full.sh scripts/test_event_flow.sh
+  && chmod +x scripts/test_api_curl.sh scripts/test_api_curl_full.sh scripts/test_event_flow.sh \
+  && chmod +x scripts/test_redis_down.sh scripts/test_rabbitmq_down_outbox.sh scripts/test_consumer_retry_dlq.sh
 
 RUN groupadd -g 1000 app && useradd -m -u 1000 -g 1000 app \
   && chown -R app:app /app
