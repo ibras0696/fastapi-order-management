@@ -1,0 +1,76 @@
+services:
+  web:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "8001:8000"
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./app:/app/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-order_management}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:6-alpine
+    ports:
+      - "6380:6379"
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    restart: unless-stopped
+
+  celery_worker:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    restart: unless-stopped
+
+  outbox_publisher:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - rabbitmq
+      - web
+    command: python -m app.workers.outbox_publisher
+    restart: unless-stopped
+
+  message_consumer:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+      - celery_worker
+    command: python -m app.consumers.new_order_consumer
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
