@@ -109,7 +109,7 @@ def run_forever() -> None:
                 on_message=handle_message,
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Consumer connection failed: {err}", err=str(exc))
+            logger.warning("Consumer connection failed: {err}", err=repr(exc))
             time.sleep(2)
 
 

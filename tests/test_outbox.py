@@ -13,7 +13,7 @@ from app.models import order as _order  # noqa: F401
 from app.models import outbox as _outbox  # noqa: F401
 from app.models import user as _user  # noqa: F401
 from app.models.outbox import OutboxEvent
-from tests_helpers import make_client
+from tests.helpers import make_client
 
 
 def _fetch_outbox_events(

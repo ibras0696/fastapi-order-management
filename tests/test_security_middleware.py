@@ -8,7 +8,7 @@ from app.core import config as config_module
 from app.core import rate_limit_middleware as rate_limit_module
 from app.models import order as _order  # noqa: F401
 from app.models import user as _user  # noqa: F401
-from tests_helpers import make_client
+from tests.helpers import make_client
 
 
 def test_rate_limit_returns_429(tmp_path: Path, monkeypatch) -> None:

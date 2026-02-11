@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.models import order as _order  # noqa: F401  # ensure model import for metadata
 from app.models import user as _user  # noqa: F401  # ensure model import for metadata
-from tests_helpers import make_client
+from tests.helpers import make_client
 
 
 def register_and_login(client: TestClient, email: str, password: str) -> str:

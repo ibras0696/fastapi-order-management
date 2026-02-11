@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.models import user as _user  # noqa: F401  # ensure model import for metadata
-from tests_helpers import make_client
+from tests.helpers import make_client
 
 
 def test_register_and_token_happy_path(tmp_path: Path) -> None:

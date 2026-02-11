@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,58 +46,55 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "order-management"
-    app_env: str = "local"
-    log_level: str = "INFO"
+    app_name: str = Field("order-management")
+    app_env: str = Field("local")
+    log_level: str = Field("INFO")
 
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_host: str = Field("0.0.0.0")
+    api_port: int = Field(8000)
 
-    run_migrations_on_startup: bool = False
-    migrations_wait_tries: int = 60
-    migrations_wait_sleep_seconds: float = 1.0
+    run_migrations_on_startup: bool = Field(False)
+    migrations_wait_tries: int = Field(60, ge=1)
+    migrations_wait_sleep_seconds: float = Field(1.0, gt=0)
 
-    secret_key: SecretStr = Field(
-        ...,
-        min_length=32,
-        description="JWT signing key (set via SECRET_KEY env var).",
-    )
-    algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    secret_key: SecretStr = Field(..., min_length=32)
+    algorithm: str = Field("HS256")
+    access_token_expire_minutes: int = Field(30, ge=1)
 
-    cors_allow_origins: str = "*"
-    cors_allow_methods: str = "*"
-    cors_allow_headers: str = "*"
-    cors_allow_credentials: bool = False
+    cors_allow_origins: str = Field("*")
+    cors_allow_methods: str = Field("*")
+    cors_allow_headers: str = Field("*")
+    cors_allow_credentials: bool = Field(False)
 
-    rate_limit_enabled: bool = True
-    rate_limit_backend: str = "memory"
-    rate_limit_capacity: int = 100
-    rate_limit_refill_rate: float = 50.0
+    rate_limit_enabled: bool = Field(True)
+    rate_limit_backend: str = Field("memory")
+    rate_limit_capacity: int = Field(100, ge=1)
+    rate_limit_refill_rate: float = Field(50.0, gt=0)
 
-    postgres_host: str = "db"
-    postgres_port: int = 5432
-    postgres_db: str = "order_management"
-    postgres_user: str = "postgres"
-    postgres_password: str = "change-me"
+    # Connection settings must come from env/.env (no hardcoded credentials).
+    postgres_host: str | None = None
+    postgres_port: int | None = None
+    postgres_db: str | None = None
+    postgres_user: str | None = None
+    postgres_password: SecretStr | None = None
 
-    redis_host: str = "redis"
-    redis_port: int = 6379
-    redis_db: int = 0
-    redis_orders_ttl_seconds: int = 300
+    redis_host: str = Field(...)
+    redis_port: int = Field(..., ge=1, le=65535)
+    redis_db: int = Field(..., ge=0)
+    redis_orders_ttl_seconds: int = Field(300, ge=1)
 
-    rabbitmq_host: str = "rabbitmq"
-    rabbitmq_port: int = 5672
-    rabbitmq_user: str = "guest"
-    rabbitmq_password: str = "guest"
-    rabbitmq_vhost: str = "/"
-    rabbitmq_new_order_queue: str = "new_order"
-    rabbitmq_consumer_max_retries: int = 5
-    rabbitmq_consumer_retry_base_seconds: float = 2.0
+    rabbitmq_host: str = Field(...)
+    rabbitmq_port: int = Field(..., ge=1, le=65535)
+    rabbitmq_user: str = Field(...)
+    rabbitmq_password: SecretStr = Field(...)
+    rabbitmq_vhost: str = Field("/")
+    rabbitmq_new_order_queue: str = Field("new_order")
+    rabbitmq_consumer_max_retries: int = Field(5, ge=0)
+    rabbitmq_consumer_retry_base_seconds: float = Field(2.0, gt=0)
 
-    outbox_poll_seconds: float = 1.0
-    outbox_batch_size: int = 50
-    outbox_lease_seconds: int = 30
+    outbox_poll_seconds: float = Field(1.0, gt=0)
+    outbox_batch_size: int = Field(50, ge=1)
+    outbox_lease_seconds: int = Field(30, ge=1)
 
     celery_broker_url: str | None = None
     celery_result_backend: str | None = None
@@ -109,8 +106,22 @@ class Settings(BaseSettings):
     def postgres_dsn(self) -> str:
         """Build PostgreSQL DSN from component settings."""
 
+        if (
+            self.postgres_host is None
+            or self.postgres_port is None
+            or self.postgres_db is None
+            or self.postgres_user is None
+            or self.postgres_password is None
+        ):
+            raise ValueError(
+                "Postgres settings are incomplete: set DATABASE_URL or set all "
+                "POSTGRES_HOST/POSTGRES_PORT/POSTGRES_DB/POSTGRES_USER/"
+                "POSTGRES_PASSWORD"
+            )
+
+        password = self.postgres_password.get_secret_value()
         return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql://{self.postgres_user}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
@@ -139,7 +150,7 @@ class Settings(BaseSettings):
         """
 
         return (
-            f"amqp://{self.rabbitmq_user}:{self.rabbitmq_password}"
+            f"amqp://{self.rabbitmq_user}:{self.rabbitmq_password.get_secret_value()}"
             f"@{self.rabbitmq_host}:{self.rabbitmq_port}/"
             f"{self.rabbitmq_vhost.lstrip('/')}"
         )
@@ -215,6 +226,21 @@ class Settings(BaseSettings):
         if url.startswith("sqlite+pysqlite://"):
             return url.replace("sqlite+pysqlite://", "sqlite+aiosqlite://", 1)
         return url
+
+    @model_validator(mode="after")
+    def _validate_required_sources(self) -> "Settings":
+        """Проверить, что данные приходят из env/.env, а не из хардкода.
+
+        Notes
+        -----
+        Для Postgres разрешаем два варианта:
+        - `DATABASE_URL` задан
+        - либо заданы все `POSTGRES_*`
+        """
+
+        if self.database_url is None:
+            _ = self.postgres_dsn
+        return self
 
 
 @lru_cache(maxsize=1)
