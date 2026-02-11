@@ -46,6 +46,16 @@ cd fastapi-order-management
 make ci
 ```
 
+## CI (GitHub Actions)
+
+В репозитории настроен pipeline GitHub Actions: `.github/workflows/ci.yml`.
+
+Что делает pipeline:
+- устанавливает зависимости (Python 3.12)
+- прогоняет `flake8`
+- прогоняет Alembic миграции (smoke-test на SQLite)
+- запускает `pytest`
+
 ### Curl сценарии (позитив + негатив)
 
 ```bash
