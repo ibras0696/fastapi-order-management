@@ -124,20 +124,14 @@ make dc-logs      # tail логов compose
 
 ## Скриншоты (добавить перед отправкой)
 
-Положи картинки в `docs/images/` и обнови пути ниже.
-
 ### Swagger UI
 
 ![Swagger UI](docs/images/01-swagger-ui.png)
 
+### RabbitMQ (overview)
+
+![RabbitMQ Overview](docs/images/02-rabbitmq-overview.png)
+
 ### RabbitMQ (очереди/консюмеры)
 
-![RabbitMQ Queues](docs/images/02-rabbitmq-queues.png)
-
-### Celery (обработка заказа в логах)
-
-![Celery Worker Logs](docs/images/03-celery-worker-logs.png)
-
-### (Опционально) Redis кеш
-
-![Redis Cache](docs/images/04-redis-cache.png)
+![RabbitMQ Queues](docs/images/03-rabbitmq-queues.png)
