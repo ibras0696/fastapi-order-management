@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -56,7 +57,11 @@ class Settings(BaseSettings):
     migrations_wait_tries: int = 60
     migrations_wait_sleep_seconds: float = 1.0
 
-    secret_key: str = "change-me-make-it-long-and-random"
+    secret_key: SecretStr = Field(
+        ...,
+        min_length=32,
+        description="JWT signing key (set via SECRET_KEY env var).",
+    )
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
@@ -108,6 +113,14 @@ class Settings(BaseSettings):
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @field_validator("secret_key")
+    @classmethod
+    def _validate_secret_key(cls, value: SecretStr) -> SecretStr:
+        secret = value.get_secret_value()
+        if len(secret.strip()) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters long")
+        return value
 
     @property
     def redis_dsn(self) -> str:

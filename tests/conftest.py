@@ -11,4 +11,5 @@ from app.core import config as config_module  # noqa: E402
 
 # В тестах не запускаем миграции на старте приложения (они требуют внешнего Postgres).
 os.environ.setdefault("RUN_MIGRATIONS_ON_STARTUP", "false")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-with-min-32-chars-123456")
 config_module.get_settings.cache_clear()
