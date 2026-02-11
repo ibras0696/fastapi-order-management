@@ -1,19 +1,19 @@
-# Order Management (FastAPI) — Test Task
+# Order Management (FastAPI) — тестовое задание
 
-Production-minded backend service for managing orders:
+Production-minded backend сервис для управления заказами:
 - FastAPI + Swagger UI
-- PostgreSQL + SQLAlchemy + Alembic migrations
+- PostgreSQL + SQLAlchemy + Alembic миграции
 - JWT auth (OAuth2 Password Flow)
-- Redis cache with graceful degradation (fallback to DB)
-- RabbitMQ event-bus with Outbox pattern (reliable delivery)
-- Celery background processing (separate broker, default Redis)
+- Redis cache с graceful degradation (fallback на БД)
+- RabbitMQ event-bus + Outbox pattern (надёжная доставка)
+- Celery фоновые задачи (отдельный брокер, по умолчанию Redis)
 
-## Requirements
+## Требования
 
-- Docker + Docker Compose (recommended)
-- Or Python 3.12+ (local run)
+- Docker + Docker Compose (рекомендуется)
+- Или Python 3.12+ (локальный запуск)
 
-## Quick start (Docker) — recommended
+## Быстрый старт (Docker) — рекомендуется
 
 ```bash
 cd gpt_codex
@@ -23,9 +23,9 @@ docker compose up -d --build
 
 - Swagger UI: `http://localhost:8001/docs`
 - Health: `http://localhost:8001/health`
-- RabbitMQ UI: `http://localhost:15673` (default `guest/guest`)
+- RabbitMQ UI: `http://localhost:15673` (по умолчанию `guest/guest`)
 
-## Quick start (Local)
+## Быстрый старт (локально)
 
 ```bash
 cd gpt_codex
@@ -37,16 +37,16 @@ make run
 
 - Swagger UI: `http://localhost:8000/docs`
 
-## How to validate (what a reviewer can run)
+## Как проверить (что может запустить ревьюер)
 
-### Lint + unit tests
+### Линтеры + unit tests
 
 ```bash
 cd gpt_codex
 make ci
 ```
 
-### Curl scenarios (positive + negative)
+### Curl сценарии (позитив + негатив)
 
 ```bash
 cd gpt_codex
@@ -60,70 +60,70 @@ cd gpt_codex
 ./scripts/test_event_flow.sh
 ```
 
-## API summary
+## API (кратко)
 
 ### Auth
 
 - `POST /register/` — JSON `{ "email": "...", "password": "..." }`
-- `POST /token/` — `application/x-www-form-urlencoded` fields: `username` (email), `password`
+- `POST /token/` — `application/x-www-form-urlencoded` поля: `username` (email), `password`
 
 ### Orders (Authorization: Bearer <token>)
 
-- `POST /orders/` — create order
-- `GET /orders/{order_id}/` — get order (Redis first; fallback to DB)
-- `PATCH /orders/{order_id}/` — update status
-- `GET /orders/user/{user_id}/` — list own orders
+- `POST /orders/` — создать заказ
+- `GET /orders/{order_id}/` — получить заказ (сначала Redis; fallback на БД)
+- `PATCH /orders/{order_id}/` — обновить статус
+- `GET /orders/user/{user_id}/` — получить список своих заказов
 
-## Architecture (high-level)
+## Архитектура (high-level)
 
-1) `POST /orders/` writes `orders` + `outbox_events` in the same DB transaction.
-2) `outbox_publisher` reads pending outbox events and publishes to RabbitMQ (with retries).
-3) `message_consumer` consumes `new_order` events and triggers Celery task `process_order`.
-4) Celery runs on a separate broker (default Redis) to keep event-bus and task queue independent.
+1) `POST /orders/` пишет `orders` + `outbox_events` в одной транзакции БД.
+2) `outbox_publisher` читает pending outbox события и публикует в RabbitMQ (с ретраями).
+3) `message_consumer` читает события `new_order` и запускает Celery задачу `process_order`.
+4) Celery работает на отдельном брокере (по умолчанию Redis), чтобы не смешивать event-bus и task queue.
 
-## Migrations
+## Миграции
 
-### Test-task mode (self-contained docker compose)
+### Режим тестового (self-contained docker compose)
 
-By default `.env.example` enables:
+По умолчанию в `.env.example` включено:
 
 ```bash
 RUN_MIGRATIONS_ON_STARTUP=true
 ```
 
-Migrations run once on application startup using Postgres advisory lock
-(`app/core/migrations.py`). This makes `docker compose up` self-contained for the test.
+Миграции запускаются один раз при старте приложения с использованием Postgres advisory lock
+(`app/core/migrations.py`). Это делает `docker compose up` самодостаточным для тестового.
 
-### Production recommendation (typical approach)
+### Production рекомендация (типовой подход)
 
-In production, migrations are usually executed as a **separate deploy step / job**
-(CI/CD step, Kubernetes Job/initContainer), and the API process runs without DDL rights.
+В production миграции обычно выполняются отдельным **deploy шагом / job**
+(CI/CD step, Kubernetes Job/initContainer), а API процесс запускается без DDL прав.
 
-To disable migrations-on-startup in this project:
+Чтобы отключить миграции на старте в этом проекте:
 
 ```bash
 RUN_MIGRATIONS_ON_STARTUP=false
 ```
 
-Then run migrations explicitly:
+После этого миграции можно прогнать явно:
 
 ```bash
 cd gpt_codex
 make migrate
 ```
 
-## Useful commands
+## Полезные команды
 
 ```bash
 cd gpt_codex
-make clean        # remove caches/artifacts
+make clean        # удалить кеши/артефакты
 make dc-up        # docker compose up --build
 make dc-down      # docker compose down -v
-make dc-logs      # follow compose logs
+make dc-logs      # tail логов compose
 ```
 
-## Notes (production-ready expectations)
+## Замечания (production-ready ожидания)
 
-- Redis is best-effort: Redis errors must not crash the API (fallback to DB).
-- Event-bus publishing is reliable: outbox prevents “order created but event lost”.
-- No hardcoded secrets: use `.env` locally; use secret manager in real deployments.
+- Redis best-effort: ошибки Redis не должны “ронять” API (fallback на БД).
+- Надёжная публикация событий: outbox предотвращает сценарий “заказ создан, событие потеряно”.
+- Никаких захардкоженных секретов: локально `.env`, в реальных деплоях — secret manager.
