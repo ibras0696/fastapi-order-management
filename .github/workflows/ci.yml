@@ -7,6 +7,16 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      RUN_MIGRATIONS_ON_STARTUP: "false"
+      SECRET_KEY: "ci-secret-key-with-min-32-chars-123456"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      RABBITMQ_HOST: "rabbitmq"
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: "guest"
+      RABBITMQ_PASSWORD: "guest"
     steps:
       - uses: actions/checkout@v4
 
@@ -26,11 +36,7 @@ jobs:
       - name: Alembic migrations (SQLite smoke)
         env:
           DATABASE_URL: sqlite+pysqlite:///./alembic_ci.db
-          RUN_MIGRATIONS_ON_STARTUP: "false"
         run: alembic upgrade head
 
       - name: Tests
-        env:
-          RUN_MIGRATIONS_ON_STARTUP: "false"
         run: pytest -q
-
