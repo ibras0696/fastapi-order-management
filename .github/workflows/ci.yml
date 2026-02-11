@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint
+        run: flake8 .
+
+      - name: Alembic migrations (SQLite smoke)
+        env:
+          DATABASE_URL: sqlite+pysqlite:///./alembic_ci.db
+          RUN_MIGRATIONS_ON_STARTUP: "false"
+        run: alembic upgrade head
+
+      - name: Tests
+        env:
+          RUN_MIGRATIONS_ON_STARTUP: "false"
+        run: pytest -q
+
